@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Search Arsip Dokumen</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://unpkg.com/gridjs/dist/theme/mermaid.min.css" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+  <div class="header">
+    <svg xmlns="http://www.w3.org/2000/svg" width="25" height="25" fill="currentColor" class="bi bi-archive"
+      viewBox="0 0 16 16">
+      <path
+        d="M0 2a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1v7.5a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 1 12.5V5a1 1 0 0 1-1-1zm2 3v7.5A1.5 1.5 0 0 0 3.5 14h9a1.5 1.5 0 0 0 1.5-1.5V5zm13-3H1v2h14zM5 7.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5" />
+    </svg>
+    Archive Flow
+  </div>
+
+  <div class="container">
+    <div class="search-box">
+      <input type="text" id="customSearch" placeholder="Cari berdasarkan nama file, ID, atau tanggal...">
+    </div>
+
+    <div class="stats">
+      <div class="stat-card">
+        <div class="stat-number" id="totalDoc">0</div>
+        <div class="stat-label">Total Dokumen</div>
+      </div>
+      <div class="stat-card stat-progress">
+        <div class="stat-number" id="globalProgress">0%</div>
+        <div class="stat-label">Progress Keseluruhan</div>
+      </div>
+    </div>
+    <div class="table-card" style="margin-bottom:20px">
+      <div class="table-header">Progress Upload</div>
+      <div id="progressBox" style="padding:20px"></div>
+    </div>
+    <div class="table-card">
+      <div class="table-header">
+        Daftar Dokumen
+      </div>
+      <div id="wrapper"></div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/gridjs/dist/gridjs.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <script>
+    const API_URL = "https://script.google.com/macros/s/AKfycbxM7yXVpPTwXjfhlFOtaLJHP6bnck1LqQFrEVolpQkstN_BNxFXAou4m1lILcuARW17/exec";
+
+    let rawData = [];
+    let targets = {};
+    let grid;
+
+    fetch(API_URL)
+      .then(response => response.json())
+      .then(json => {
+
+        rawData = json.data;
+
+        const tRows = json.targets;
+        tRows.forEach(r => {
+          if (r[0] && r[1]) {
+            targets[r[0].trim()] = parseInt(r[1]);
+          }
+        });
+
+        renderGrid(rawData);
+        updateStats(rawData);
+        renderProgress(rawData);
+
+      })
+      .catch(err => {
+        console.error("Gagal mengambil data:", err);
+        alert("Gagal memuat data. Pastikan koneksi internet lancar.");
+      });
+
+    function renderGrid(data) {
+      if (grid) grid.destroy();
+      grid = new gridjs.Grid({
+        columns: ["Nama File", "Link", "Tanggal", "ID", "Folder"],
+        data: data.map(r => [
+          r[0], gridjs.html(`<a class="btn-lihat" href="${r[1]}" target="_blank">View</a>`), r[2] ? new Date(r[2]).toLocaleDateString('id-ID') : "-",
+          r[3], r[4]
+        ]),
+        pagination: { limit: 10 },
+        search: false
+      });
+      grid.render(document.getElementById("wrapper"));
+    }
+
+    function updateStats(dataToCount) {
+      document.getElementById("totalDoc").innerText = rawData.length;
+
+      let totalTarget = 0;
+      Object.values(targets).forEach(val => totalTarget += val);
+
+      const totalUploaded = rawData.length;
+      let percent = 0;
+      if (totalTarget > 0) {
+        percent = Math.round((totalUploaded / totalTarget) * 100);
+      }
+      document.getElementById("globalProgress").innerText = percent + "%";
+    }
+
+    function renderProgress(data) {
+      const folderCount = {};
+      data.forEach(r => {
+        const f = (r[4] || "Tanpa Folder").trim();
+        folderCount[f] = (folderCount[f] || 0) + 1;
+      });
+
+      let html = "";
+      Object.keys(targets).forEach(f => {
+        const uploaded = folderCount[f] || 0;
+        const target = targets[f];
+        const percent = Math.round(uploaded / target * 100) || 0;
+
+        const displayPercent = isNaN(percent) ? 0 : percent;
+
+        html += `
+      <div class="progress-row">
+        <div class="progress-label">${f} — ${uploaded}/${target}</div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width:${displayPercent}%">${displayPercent}%</div>
+        </div>
+      </div>`;
+      });
+
+      document.getElementById("progressBox").innerHTML = html;
+    }
+
+    document.getElementById("customSearch").addEventListener("input", e => {
+      const k = e.target.value.toLowerCase(); const f = rawData.filter(r => r.join(" ").toLowerCase().includes(k));
+
+      renderGrid(f);
+    });
+  </script>
+
+</body>
+
+</html>
